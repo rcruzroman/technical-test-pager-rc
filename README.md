@@ -12,6 +12,8 @@ The tests are located in test/java/io/aircall/pagerservice. In order to implemen
 
 ## How to test it
 
+In order to test this solution, you will have to execute the next command in the root folder.
+
 `mvn clean test`
 
 ## Assumptions
