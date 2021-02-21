@@ -28,4 +28,6 @@ It would like to mention some assumptions before starting with the tests:
 
 * When the all the target have been notified but still no ack received nor healthy event, if a timeout ack is received, no actions will be done for the service.
 
+## Concurrency
 
+My proposal to avoid the issues with concurrency was to set part of the method io.aircall.pagerservice.adapters.impl.AlertingAdapterImpl.sendAlertToPager synchronized. This is the entry point for the alerts, with synchronized, this code will be locked and only thread will be able to use it.
