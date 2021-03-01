@@ -21,9 +21,7 @@ public class AlertingAdapterImpl implements AlertingAdapter {
    */
   @Override
   public void sendAlertToPager(AlertService alertService) {
-    synchronized (this) {
       getPagerService().notifyAlert(alertService);
-    }
   }
 
   private PagerService getPagerService(){

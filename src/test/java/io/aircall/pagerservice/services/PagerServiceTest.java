@@ -4,11 +4,6 @@ import io.aircall.escalation.entities.Level;
 import io.aircall.escalation.entities.TargetEmail;
 import io.aircall.escalation.entities.TargetSMS;
 import io.aircall.escalation.services.EscalationService;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 import io.aircall.pagerservice.FakeFactory;
 import io.aircall.pagerservice.adapters.AlertingAdapter;
 import io.aircall.pagerservice.adapters.PersistencePagerAdapter;
@@ -19,15 +14,17 @@ import io.aircall.pagerservice.adapters.impl.TimerAdapterImpl;
 import io.aircall.pagerservice.entities.MonitoredService;
 import io.aircall.pagerservice.entities.MonitoredServiceStatus;
 import io.aircall.pagerservice.services.impl.PagerServiceImpl;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.*;
 
 public class PagerServiceTest {
 
@@ -46,14 +43,17 @@ public class PagerServiceTest {
 
   @Before
   public void before() {
-    targetSMS = mock(TargetSMS.class);
-    targetEmail = mock(TargetEmail.class);
+    targetSMS = Mockito.spy(new TargetSMS("", null, FakeFactory.FakeTarget.AVAILABILITY_HOURS));
+    targetEmail = Mockito.spy(new TargetEmail("", null, FakeFactory.FakeTarget.AVAILABILITY_HOURS));
     persistencePagerAdapter = mock(PersistencePagerAdapter.class);
     escalationService = mock(EscalationService.class);
     timerAdapter = mock(TimerAdapter.class);
     pagerService = new PagerServiceImpl(escalationService, persistencePagerAdapter, timerAdapter);
     alertingAdapter = new AlertingAdapterImpl(pagerService);
 
+    ((PagerServiceImpl)pagerService).setCurrentLocalDateTime(FakeFactory.FakeTarget.CURRENT_TIME_WITHIN_AVAILABILITY_HOURS);
+    Mockito.doNothing().when(targetEmail).sendNotification(MESSAGE);
+    Mockito.doNothing().when(targetSMS).sendNotification(MESSAGE);
     when(escalationService.getTargetByServiceAndLevel(anyInt(), anyInt())).thenReturn(FakeFactory.FakeTarget.getListTargetWithEmailAndSMS(targetEmail, targetSMS));
     when(escalationService.getLevelsByService(SERVICE_ID)).thenReturn(FakeFactory.FakeLevel.getListLevels(Arrays.asList(targetEmail, targetSMS)));
   }
@@ -88,11 +88,42 @@ public class PagerServiceTest {
   }
 
   /**
+   * Scenario 1.1:
+   * Given a Monitored Service in a Healthy State,
+   * when the Pager receives an Alert related to this Monitored Service,
+   * then the Monitored Service becomes Unhealthy,
+   * the Pager notifies all targets of the first level with availability
+   * and sets a 15-minutes acknowledgement delay
+   */
+  @Test
+  public void receiveAlertButTargetNoAvailability() {
+
+    ((PagerServiceImpl)pagerService).setCurrentLocalDateTime(FakeFactory.FakeTarget.CURRENT_TIME_OUT_OF_AVAILABILITY_HOURS);
+    MonitoredService monitoredService = FakeFactory.FakeMonitoredService.getMonitedServiceHealthyStatus(SERVICE_ID);
+    when(persistencePagerAdapter.getMonitoredServiceById(Mockito.anyInt())).thenReturn(monitoredService);
+    when(escalationService.getTargetByServiceAndLevel(SERVICE_ID, FIRST_LEVEL)).thenReturn(FakeFactory.FakeTarget.getListTargetWithEmailAndSMS(targetEmail, targetSMS));
+
+    alertingAdapter.sendAlertToPager(FakeFactory.FakeAlert.getFakeAlertService(SERVICE_ID, MESSAGE));
+
+    ArgumentCaptor<MonitoredService> argumentPersistenceAdapter = ArgumentCaptor.forClass(MonitoredService.class);
+    verify(persistencePagerAdapter).saveMonitoredService(argumentPersistenceAdapter.capture());
+    Assert.assertEquals(SERVICE_ID, argumentPersistenceAdapter.getValue().getId());
+    Assert.assertEquals(MonitoredServiceStatus.PENDING_ACK, argumentPersistenceAdapter.getValue().getStatus());
+    Assert.assertEquals(FIRST_LEVEL, argumentPersistenceAdapter.getValue().getIdLevelNotified());
+    Assert.assertEquals(MESSAGE, argumentPersistenceAdapter.getValue().getAlertMessage());
+
+    verify(targetEmail, never()).sendNotification(MESSAGE);
+    verify(targetSMS, never()).sendNotification(MESSAGE);
+
+    verify(timerAdapter).setAckTimeout(SERVICE_ID, TIMEOUT_ACK_MINUTES);
+  }
+
+  /**
    * Scenario 2:
    * Given a Monitored Service in an Unhealthy State,
    * the corresponding Alert is not Acknowledged
    * and the last level has not been notified,
-   * when the Pager receives the Acknowledgement Timeout,
+   * when the Pager receivesgetListTargetWithEmailAndSMS the Acknowledgement Timeout,
    * then the Pager notifies all targets of the next level of the io.aircall.escalation policy
    * and sets a 15-minutes acknowledgement delay.
    */
@@ -220,5 +251,25 @@ public class PagerServiceTest {
     verify(targetSMS, never()).sendNotification(MESSAGE);
     verify(timerAdapter, never()).setAckTimeout(SERVICE_ID, TIMEOUT_ACK_MINUTES);
   }
+
+//  @Test
+//  public void givenInstantMock_whenNow_thenGetFixedInstant() {
+////    String instantExpected = "2014-12-22T10:15:30Z";
+////    Clock clock = Clock.fixed(Instant.parse(instantExpected), ZoneId.of("UTC"));
+////    Instant instant = Instant.now(clock);
+////    mockStatic(Instant.class);
+////    when(Instant.now()).thenReturn(instant);
+//
+//    String instantExpected = "2014-12-22T10:15:52Z";
+//    Clock clock = Clock.fixed(Instant.parse(instantExpected), ZoneId.systemDefault());
+////    System.out.println(clock);
+//    LocalDateTime instant = LocalDateTime.now(clock);
+//    mockStatic(LocalDateTime.class);
+//    when(LocalDateTime.now()).thenReturn(instant);
+//
+//    LocalDateTime now = LocalDateTime.now();
+//    Assert.assertEquals(now.toString(), instantExpected);
+//
+//  }
 
 }

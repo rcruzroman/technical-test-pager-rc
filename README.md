@@ -30,4 +30,4 @@ It would like to mention some assumptions before starting with the tests:
 
 ## Concurrency
 
-My proposal to avoid the issues with concurrency was to set part of the method io.aircall.pagerservice.adapters.impl.AlertingAdapterImpl.sendAlertToPager synchronized. This is the entry point for the alerts, with synchronized, this code will be locked and only thread will be able to use it.
+My proposal to avoid the issues in persistence layer is always to manage the operations with DB ensuring ACID principles, managing transactions properly. Also, it could be implemented an optimistic / pesimistic locking strategy.

@@ -9,5 +9,5 @@ public interface Target {
    * It will send the notification to the target
    * @param message Message that will contain the notification
    */
-  void sendNotification(String message);
+  public void sendNotification(String message);
 }

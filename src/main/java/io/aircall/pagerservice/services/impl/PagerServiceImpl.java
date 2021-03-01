@@ -2,6 +2,7 @@ package io.aircall.pagerservice.services.impl;
 
 import io.aircall.escalation.entities.Level;
 import io.aircall.escalation.entities.Target;
+import io.aircall.escalation.entities.TargetAbstract;
 import io.aircall.escalation.services.EscalationService;
 import io.aircall.escalation.services.impl.EscalationServiceImpl;
 import io.aircall.pagerservice.adapters.PersistencePagerAdapter;
@@ -13,17 +14,16 @@ import io.aircall.pagerservice.entities.MonitoredService;
 import io.aircall.pagerservice.entities.MonitoredServiceStatus;
 import io.aircall.pagerservice.services.PagerService;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.time.LocalDateTime;
+import java.util.*;
 
 public class PagerServiceImpl implements PagerService {
 
   private static final int ACK_TIMEOUT_MINUTES_VALUE = 15;
-  EscalationService escalationService;
-  PersistencePagerAdapter persistencePagerAdapter;
-  TimerAdapter timerAdapter;
+  private EscalationService escalationService;
+  private PersistencePagerAdapter persistencePagerAdapter;
+  private TimerAdapter timerAdapter;
+  private LocalDateTime currentLocalDateTime;
 
   public PagerServiceImpl() {
 
@@ -36,8 +36,8 @@ public class PagerServiceImpl implements PagerService {
   }
 
   /**
-   * @inheritDoc
    * @param alertService Service alert to be processed
+   * @inheritDoc
    */
   @Override
   public void notifyAlert(AlertService alertService) {
@@ -49,8 +49,8 @@ public class PagerServiceImpl implements PagerService {
   }
 
   /**
-   * @inheritDoc
    * @param serviceId Service alert id to be notified the timeout ack
+   * @inheritDoc
    */
   @Override
   public void notifyAckTimeout(int serviceId) {
@@ -62,8 +62,8 @@ public class PagerServiceImpl implements PagerService {
   }
 
   /**
-   * @inheritDoc
    * @param serviceId Service alert id which will be marked as acknowledged
+   * @inheritDoc
    */
   @Override
   public void notifyAck(int serviceId) {
@@ -73,8 +73,8 @@ public class PagerServiceImpl implements PagerService {
   }
 
   /**
-   * @inheritDoc
    * @param serviceId Service alert id which will be marked as healthy
+   * @inheritDoc
    */
   @Override
   public void notifyHealthyEvent(int serviceId) {
@@ -87,6 +87,7 @@ public class PagerServiceImpl implements PagerService {
 
   /**
    * It will user send to the time the Ack Timeout.
+   *
    * @param serviceId Service alert id for which will be set the ack timeout
    */
   private void sendTimeoutDelay(int serviceId) {
@@ -96,8 +97,9 @@ public class PagerServiceImpl implements PagerService {
   /**
    * It will send the notification to the next level targets.
    * Also, it will set the right status {@link io.aircall.pagerservice.entities.MonitoredServiceStatus PENDING_ACK} with the alert message
+   *
    * @param monitoredService Monitored service which has the alert
-   * @param message Alert message to be sent to the targets
+   * @param message          Alert message to be sent to the targets
    */
   private void sendNotificationAndChangeStatus(MonitoredService monitoredService, String message) {
 
@@ -113,29 +115,39 @@ public class PagerServiceImpl implements PagerService {
 
   /**
    * It will send the notification for each target.
-   * @param monitoredService Monitored Service which has the alert
+   *
+   * @param monitoredService  Monitored Service which has the alert
    * @param levelToBeNotified Target level which should receive the notifications
-   * @param message Alert message that has to be sent to the targets
+   * @param message           Alert message that has to be sent to the targets
    * @throws IllegalArgumentException if no target is retrieved for the level specified
    */
-  private void notifyTargets(MonitoredService monitoredService, int levelToBeNotified, String message){
+  private void notifyTargets(MonitoredService monitoredService, int levelToBeNotified, String message) {
     List<Target> targetsToBeNotified = getEscalationService().getTargetByServiceAndLevel(monitoredService.getId(), levelToBeNotified);
 
     if (targetsToBeNotified.isEmpty()) {
       throw new IllegalArgumentException("The target list to be notified for the serviceId " + monitoredService.getId() + " and levelId " + levelToBeNotified + " is not available.");
     }
 
-    targetsToBeNotified.forEach(target -> target.sendNotification(message));
+    targetsToBeNotified.forEach(target -> {
+      if (isAvailable((TargetAbstract) target)) {
+        target.sendNotification(message);
+      }
+    });
+  }
+
+  private boolean isAvailable(TargetAbstract target) {
+    return target.getAvailailabilityHours().stream().filter(hour -> hour.equals(getCurrentLocalDateTime().getHour())).findFirst().isPresent();
   }
 
   /**
    * It will check if the current monitored service level is the maximum level available for the service passed
-   * @param serviceId Service id for which will be calculated the maximum level
+   *
+   * @param serviceId            Service id for which will be calculated the maximum level
    * @param currentLevelNotified Last level that was notified for the service passed
    * @return True is current level is the maximum or False if not or the current level notified is null
    */
-  private boolean isMaxLevel(int serviceId, Integer currentLevelNotified){
-    if(Objects.isNull(currentLevelNotified)){
+  private boolean isMaxLevel(int serviceId, Integer currentLevelNotified) {
+    if (Objects.isNull(currentLevelNotified)) {
       return false;
     }
 
@@ -146,6 +158,7 @@ public class PagerServiceImpl implements PagerService {
 
   /**
    * It will calculate the next level to be notified
+   *
    * @param monitoredService Monitored Service which has the alert
    * @return It will sum one to the current notified level. If the current one is null it will initialize the level
    */
@@ -162,6 +175,17 @@ public class PagerServiceImpl implements PagerService {
 
   private boolean isAcknowledged(MonitoredService monitoredService) {
     return monitoredService.getStatus().equals(MonitoredServiceStatus.ACKNOWLEDGED);
+  }
+
+  private LocalDateTime getCurrentLocalDateTime() {
+    if (Objects.isNull(currentLocalDateTime)) {
+      this.currentLocalDateTime = LocalDateTime.now();
+    }
+    return this.currentLocalDateTime;
+  }
+
+  public void setCurrentLocalDateTime(LocalDateTime currentLocalDateTime){
+    this.currentLocalDateTime = currentLocalDateTime;
   }
 
   private MonitoredService getMonitoredService(int serviceId) {

@@ -1,13 +1,11 @@
 package io.aircall.pagerservice;
 
-import io.aircall.escalation.entities.Level;
-import io.aircall.escalation.entities.Target;
-import io.aircall.escalation.entities.TargetEmail;
-import io.aircall.escalation.entities.TargetSMS;
+import io.aircall.escalation.entities.*;
 import io.aircall.pagerservice.entities.AlertService;
 import io.aircall.pagerservice.entities.MonitoredService;
 import io.aircall.pagerservice.entities.MonitoredServiceStatus;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,6 +51,11 @@ public class FakeFactory {
   }
 
   public static class FakeTarget {
+
+    public static final List<Integer> AVAILABILITY_HOURS = List.of(12,17,20);
+    public static final LocalDateTime CURRENT_TIME_OUT_OF_AVAILABILITY_HOURS = LocalDateTime.of(2021,01,01,11,00,00);
+    public static final LocalDateTime CURRENT_TIME_WITHIN_AVAILABILITY_HOURS = LocalDateTime.of(2021,01,01,12,00,00);
+
     public static List<Target> getListTargetWithEmailAndSMS(TargetEmail targetEmail, TargetSMS targetSMS) {
       List<Target> result = new ArrayList<>();
       result.add(targetEmail);
